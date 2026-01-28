@@ -1,0 +1,18 @@
+{
+  "name": "sso-toolkit-web",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "dev": "PORT=3000 node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "fast-xml-parser": "^4.5.3",
+    "multer": "^1.4.5-lts.1"
+  }
+}

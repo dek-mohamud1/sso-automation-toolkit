@@ -1,0 +1,398 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Local SSO automation toolkit for SAML configuration - parse IdP metadata and generate Auth0-ready config packs"
+    />
+    <meta name="author" content="Dek" />
+    <title>SSO Automation Toolkit by Dek</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+
+  <body>
+    <div class="app">
+      <!-- Header -->
+      <header class="topbar">
+        <div class="brand">
+          <div class="logo" aria-label="SSO Toolkit Logo">SSO</div>
+          <div>
+            <h1>SSO Automation Toolkit</h1>
+            <p class="subtitle">
+              Browser-based tool to accelerate SAML configuration for
+              <b>Auth0</b> and <b>Service Providers</b>
+            </p>
+          </div>
+        </div>
+
+        <div class="top-actions">
+          <span class="pill">Client-side only</span>
+          <span class="pill subtle">No data stored</span>
+          <span class="pill">v1.1</span>
+        </div>
+      </header>
+
+      <nav class="tabs" aria-label="Main navigation">
+        <button
+          class="tab active"
+          data-tab="auth0"
+          aria-label="Identity Provider to Auth0 configuration"
+        >
+          IdP → Auth0 Config
+        </button>
+        <button
+          class="tab"
+          data-tab="sp"
+          aria-label="Service Provider customer pack"
+        >
+          SP → Customer Pack
+        </button>
+      </nav>
+
+      <!-- TAB 1: IdP → Auth0 -->
+      <section
+        id="tab-auth0"
+        class="panel active"
+        aria-labelledby="auth0-heading"
+      >
+        <div class="panel-head">
+          <h2 id="auth0-heading">
+            Identity Provider Metadata → Auth0 Configuration
+          </h2>
+          <p class="hint">
+            Parse SAML metadata from a URL or XML file. Automatically extracts
+            SSO endpoints, issuer, certificates, and generates Auth0-ready
+            configuration.
+          </p>
+        </div>
+
+        <div class="card">
+          <h3 class="card-title">Input Source</h3>
+
+          <div class="grid">
+            <div class="field span-8">
+              <label for="idpMetadataUrl">IdP Metadata URL (Recommended)</label>
+              <div class="input-row">
+                <input
+                  id="idpMetadataUrl"
+                  type="url"
+                  placeholder="https://idp.example.com/saml/metadata"
+                  aria-describedby="url-hint"
+                />
+                <button id="btnParseIdpUrl" class="btn primary">
+                  Parse URL
+                </button>
+              </div>
+              <div id="url-hint" class="micro">
+                Provide the full HTTPS URL to the IdP's SAML metadata endpoint.
+              </div>
+            </div>
+
+            <div class="field span-4">
+              <label for="idpDomains">
+                IdP Domains <span class="optional">(optional)</span>
+              </label>
+              <input
+                id="idpDomains"
+                type="text"
+                placeholder="company.com, corp.net"
+                aria-describedby="domains-hint"
+              />
+              <div id="domains-hint" class="micro">
+                Comma-separated list for documentation purposes.
+              </div>
+            </div>
+
+            <div class="field span-12">
+              <label for="idpMetadataFile">OR Upload Metadata XML</label>
+              <div class="input-row">
+                <input
+                  id="idpMetadataFile"
+                  type="file"
+                  accept=".xml,text/xml,application/xml"
+                  aria-describedby="file-hint"
+                />
+                <button id="btnParseIdpFile" class="btn">Parse File</button>
+              </div>
+              <div id="file-hint" class="micro">
+                Maximum file size: 5MB. Accepts .xml files only.
+              </div>
+            </div>
+          </div>
+
+          <div
+            id="auth0Status"
+            class="status hidden"
+            role="status"
+            aria-live="polite"
+          ></div>
+        </div>
+
+        <div id="auth0Output" class="stack hidden" aria-live="polite">
+          <!-- Auth0 Fields -->
+          <div class="card">
+            <div class="card-top">
+              <div>
+                <h3 class="card-title">Auth0 Configuration Fields</h3>
+                <div class="micro">
+                  Copy these values into your Auth0 SAML connection settings.
+                </div>
+              </div>
+              <div class="pill-group">
+                <span class="pill subtle">Detected:</span>
+                <span
+                  id="providerGuess"
+                  class="pill"
+                  aria-label="Detected identity provider"
+                ></span>
+              </div>
+            </div>
+
+            <div class="grid">
+              <div class="kv span-6">
+                <div class="k">Sign In URL</div>
+                <div
+                  class="v code"
+                  id="signInUrl"
+                  aria-label="SAML Sign In URL"
+                ></div>
+                <button
+                  class="btn small ghost copy"
+                  data-copy="signInUrl"
+                  aria-label="Copy Sign In URL"
+                >
+                  Copy
+                </button>
+              </div>
+
+              <div class="kv span-6">
+                <div class="k">Sign Out URL</div>
+                <div
+                  class="v code"
+                  id="signOutUrl"
+                  aria-label="SAML Sign Out URL"
+                ></div>
+                <button
+                  class="btn small ghost copy"
+                  data-copy="signOutUrl"
+                  aria-label="Copy Sign Out URL"
+                >
+                  Copy
+                </button>
+              </div>
+
+              <div class="kv span-12">
+                <div class="k">Issuer / Entity ID</div>
+                <div
+                  class="v code"
+                  id="issuerEntityId"
+                  aria-label="SAML Issuer Entity ID"
+                ></div>
+                <button
+                  class="btn small ghost copy"
+                  data-copy="issuerEntityId"
+                  aria-label="Copy Issuer Entity ID"
+                >
+                  Copy
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Certificate -->
+          <div class="card">
+            <div class="card-top">
+              <div>
+                <h3 class="card-title">X.509 Signing Certificate</h3>
+                <div class="micro">
+                  PEM-formatted certificate ready for Auth0.
+                </div>
+              </div>
+
+              <div class="cert-meta">
+                <div class="cert-exp">
+                  <div class="label">Expires</div>
+                  <div
+                    id="certExpiry"
+                    class="value"
+                    aria-label="Certificate expiration date"
+                  >
+                    Unknown
+                  </div>
+                </div>
+
+                <div class="actions">
+                  <button
+                    class="btn small ghost copy"
+                    data-copy="certPem"
+                    aria-label="Copy certificate to clipboard"
+                  >
+                    Copy Cert
+                  </button>
+                  <button
+                    id="downloadPemBtn"
+                    class="btn small"
+                    aria-label="Download certificate as PEM file"
+                  >
+                    Download .pem
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <textarea
+              id="certPem"
+              rows="10"
+              readonly
+              aria-label="X.509 certificate in PEM format"
+              spellcheck="false"
+            ></textarea>
+          </div>
+
+          <!-- Mappings -->
+          <div class="card">
+            <div class="card-top">
+              <div>
+                <h3 class="card-title">Attribute Mappings</h3>
+                <div class="micro">
+                  JSON mapping for email, given name, and family name
+                  attributes.
+                </div>
+              </div>
+
+              <div class="actions">
+                <button
+                  class="btn small ghost copy"
+                  data-copy="mappingJson"
+                  aria-label="Copy mappings JSON"
+                >
+                  Copy JSON
+                </button>
+                <button
+                  id="downloadMappingBtn"
+                  class="btn small"
+                  aria-label="Download mappings as JSON file"
+                >
+                  Download .json
+                </button>
+              </div>
+            </div>
+
+            <textarea
+              id="mappingJson"
+              rows="7"
+              aria-label="Attribute mappings in JSON format"
+              spellcheck="false"
+            ></textarea>
+          </div>
+
+          <!-- Warnings + Notes -->
+          <div class="grid">
+            <div class="card span-6">
+              <h3 class="card-title">Warnings</h3>
+              <ul
+                id="warnList"
+                class="list"
+                aria-label="Configuration warnings"
+              ></ul>
+            </div>
+
+            <div class="card span-6">
+              <h3 class="card-title">Notes</h3>
+              <ul
+                id="notesList"
+                class="list"
+                aria-label="Additional notes"
+              ></ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 2: Service Provider → Customer -->
+      <section id="tab-sp" class="panel" aria-labelledby="sp-heading">
+        <div class="panel-head">
+          <h2 id="sp-heading">Service Provider → Customer Setup Pack</h2>
+          <p class="hint">
+            Generate Service Provider metadata URLs, Entity IDs, ACS/Reply URLs,
+            and sign-in endpoints for customer SSO configuration.
+          </p>
+        </div>
+
+        <div class="card">
+          <h3 class="card-title">Configuration</h3>
+
+          <div class="grid">
+            <div class="field span-3">
+              <label for="environment">Environment</label>
+              <select id="environment" aria-describedby="env-hint">
+                <option value="prod">Production</option>
+                <option value="uat">Staging / UAT</option>
+                <option value="both">Both</option>
+              </select>
+              <div id="env-hint" class="micro">
+                Select target deployment environment.
+              </div>
+            </div>
+
+            <div class="field span-7">
+              <label for="spIdentifier">Connection Identifier</label>
+              <input
+                id="spIdentifier"
+                type="text"
+                placeholder="customer-sso-connection"
+                aria-describedby="identifier-hint"
+              />
+              <div id="identifier-hint" class="micro">
+                Alphanumeric identifier for metadata and callback URLs.
+              </div>
+            </div>
+
+            <div class="field span-2">
+              <label>&nbsp;</label>
+              <button id="btnGenerateSpPack" class="btn primary w100">
+                Generate
+              </button>
+            </div>
+          </div>
+
+          <div
+            id="spStatus"
+            class="status hidden"
+            role="status"
+            aria-live="polite"
+          ></div>
+        </div>
+
+        <div id="spOutput" class="stack hidden" aria-live="polite">
+          <div class="card">
+            <div class="card-top">
+              <div>
+                <h3 class="card-title">Customer Setup Pack</h3>
+                <div class="micro">
+                  Copy and send to customer for their IdP configuration.
+                </div>
+              </div>
+            </div>
+
+            <div id="spCards" class="stack"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Footer -->
+      <footer class="footer">
+        <div class="foot-left">
+          <span class="muted">
+            Built by Dek • Client-side processing • No data stored or
+            transmitted
+          </span>
+        </div>
+      </footer>
+    </div>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
