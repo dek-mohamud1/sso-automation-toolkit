@@ -67,12 +67,12 @@ export async function fetchXmlFromUrl(url) {
     if (!response.ok) {
       if (response.status === 404) {
         throw new Error(
-          "Metadata not found (HTTP 404). Verify the URL and connection name are correct.",
+          "Metadata not found (HTTP 404). Verify the URL and connection name are correct."
         );
       }
       if (response.status === 403) {
         throw new Error(
-          "Access forbidden (HTTP 403). The metadata may require authentication.",
+          "Access forbidden (HTTP 403). The metadata may require authentication."
         );
       }
       throw new Error(`Failed to fetch metadata (HTTP ${response.status})`);
@@ -87,7 +87,7 @@ export async function fetchXmlFromUrl(url) {
 
     if (text.length > MAX_XML_SIZE) {
       throw new Error(
-        `Response too large (max ${MAX_XML_SIZE / 1024 / 1024}MB)`,
+        `Response too large (max ${MAX_XML_SIZE / 1024 / 1024}MB)`
       );
     }
 
@@ -99,7 +99,7 @@ export async function fetchXmlFromUrl(url) {
   } catch (err) {
     if (err.name === "AbortError") {
       throw new Error(
-        "Request timed out. The server may be slow or unreachable.",
+        "Request timed out. The server may be slow or unreachable."
       );
     }
     throw err;
@@ -140,7 +140,7 @@ export function parseSamlMetadataXml(xml) {
 
   if (!entityDescriptors.length) {
     throw new Error(
-      "No EntityDescriptor found in metadata. Invalid SAML metadata.",
+      "No EntityDescriptor found in metadata. Invalid SAML metadata."
     );
   }
 
@@ -153,21 +153,21 @@ export function parseSamlMetadataXml(xml) {
   // Extract service endpoints
   const ssoServices = findAllByLocalName(
     entityDescriptor,
-    "SingleSignOnService",
+    "SingleSignOnService"
   )
     .map(normalizeService)
     .filter(Boolean);
 
   const sloServices = findAllByLocalName(
     entityDescriptor,
-    "SingleLogoutService",
+    "SingleLogoutService"
   )
     .map(normalizeService)
     .filter(Boolean);
 
   const acsServices = findAllByLocalName(
     entityDescriptor,
-    "AssertionConsumerService",
+    "AssertionConsumerService"
   )
     .map(normalizeService)
     .filter(Boolean);
@@ -181,14 +181,62 @@ export function parseSamlMetadataXml(xml) {
     .map((base64) => analyzeCertificate(base64))
     .filter(Boolean);
 
+  // Extract SAML attributes
+  const attributes = extractSamlAttributes(entityDescriptor);
+
   return {
     entityId,
     ssoServices,
     sloServices,
     acsServices,
     certs, // [{ pem, notAfter, notAfterMs }]
+    attributes, // Array of attribute objects
     raw: data,
   };
+}
+
+/**
+ * Extracts SAML attributes from metadata
+ * @param {Object} entityDescriptor - Parsed entity descriptor
+ * @returns {Array} Array of attribute objects with name and friendlyName
+ */
+function extractSamlAttributes(entityDescriptor) {
+  const attributes = [];
+
+  // Look for Attribute elements in the metadata
+  const attrNodes = findAllByLocalName(entityDescriptor, "Attribute");
+
+  attrNodes.forEach((attr) => {
+    if (!attr || typeof attr !== "object") return;
+
+    const name = attr["@_Name"] || attr["@_name"];
+    const friendlyName = attr["@_FriendlyName"] || attr["@_friendlyName"];
+    const nameFormat = attr["@_NameFormat"] || attr["@_nameFormat"];
+
+    if (name) {
+      attributes.push({
+        name,
+        friendlyName: friendlyName || null,
+        nameFormat: nameFormat || null,
+      });
+    }
+  });
+
+  // Also check for AttributeProfile which some IdPs use
+  const attrProfiles = findAllByLocalName(entityDescriptor, "AttributeProfile");
+  attrProfiles.forEach((profile) => {
+    if (typeof profile === "string" && profile.trim()) {
+      // Extract profile URI which may indicate supported attributes
+      attributes.push({
+        name: profile,
+        friendlyName: "Profile",
+        nameFormat: "urn:oasis:names:tc:SAML:2.0:attrname-format:uri",
+        isProfile: true,
+      });
+    }
+  });
+
+  return attributes;
 }
 
 /**
@@ -212,8 +260,8 @@ function normalizeService(node) {
       typeof index === "string"
         ? parseInt(index, 10)
         : typeof index === "number"
-          ? index
-          : null,
+        ? index
+        : null,
   };
 }
 
@@ -301,7 +349,9 @@ function analyzeCertificate(base64Der) {
  */
 function convertToPem(cleanBase64) {
   const lines = cleanBase64.match(/.{1,64}/g) || [cleanBase64];
-  return `-----BEGIN CERTIFICATE-----\n${lines.join("\n")}\n-----END CERTIFICATE-----`;
+  return `-----BEGIN CERTIFICATE-----\n${lines.join(
+    "\n"
+  )}\n-----END CERTIFICATE-----`;
 }
 
 // ==================== SERVICE SELECTION ====================
@@ -317,7 +367,7 @@ function pickPreferredService(services) {
 
   // Prefer HTTP-Redirect binding
   const redirect = services.find((s) =>
-    (s.binding || "").includes("HTTP-Redirect"),
+    (s.binding || "").includes("HTTP-Redirect")
   );
   if (redirect?.location) return redirect;
 
@@ -394,14 +444,128 @@ function detectProvider({ entityId, ssoUrl }) {
   if (combined.includes("google.com")) {
     return "Google Workspace";
   }
-  if (combined.includes("pingidentity") || combined.includes("pingone")) {
-    return "PingIdentity";
+  if (
+    combined.includes("pingidentity") ||
+    combined.includes("pingone") ||
+    combined.includes("pingfed-ut")
+  ) {
+    return "PingFederate Identity";
   }
   if (combined.includes("onelogin")) {
     return "OneLogin";
   }
 
   return "Unknown";
+}
+
+// ==================== ATTRIBUTE MAPPING ====================
+
+/**
+ * Builds Auth0 attribute mappings from extracted SAML attributes
+ * @param {Array} attributes - Array of SAML attribute objects
+ * @param {string} provider - Detected provider name
+ * @returns {Object} Auth0 attribute mapping object
+ */
+function buildAttributeMapping(attributes, provider) {
+  // Default mappings as fallback
+  const defaultMapping = {
+    email: [
+      "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress",
+      "emailAddress",
+    ],
+    given_name: [
+      "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/givenname",
+      "givenName",
+      "firstName",
+    ],
+    family_name: [
+      "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/surname",
+      "lastName",
+      "surname",
+    ],
+  };
+
+  // If no attributes found in metadata, return provider-specific defaults
+  if (!attributes || attributes.length === 0) {
+    return getProviderDefaultMapping(provider) || defaultMapping;
+  }
+
+  const mapping = {};
+
+  // Common attribute name patterns to look for
+  const patterns = {
+    email: [/email/i, /mail/i, /emailaddress/i, /user\.email/i],
+    given_name: [/givenname/i, /firstname/i, /given_name/i, /user\.firstname/i],
+    family_name: [
+      /surname/i,
+      /lastname/i,
+      /family_name/i,
+      /sn$/i,
+      /user\.lastname/i,
+    ],
+    name: [/displayname/i, /fullname/i, /common_name/i, /cn$/i],
+  };
+
+  // Try to match attributes from metadata
+  for (const [auth0Field, regexList] of Object.entries(patterns)) {
+    for (const attr of attributes) {
+      if (attr.isProfile) continue; // Skip profile URIs
+
+      const searchText = `${attr.name} ${attr.friendlyName || ""}`;
+
+      if (regexList.some((regex) => regex.test(searchText))) {
+        mapping[auth0Field] = attr.name;
+        break;
+      }
+    }
+  }
+
+  // Fill in any missing fields with defaults
+  return {
+    ...defaultMapping,
+    ...mapping,
+  };
+}
+
+/**
+ * Returns provider-specific default attribute mappings
+ * @param {string} provider - Provider name
+ * @returns {Object|null} Provider-specific mapping or null
+ */
+function getProviderDefaultMapping(provider) {
+  const providerLower = (provider || "").toLowerCase();
+
+  if (providerLower.includes("azure") || providerLower.includes("entra")) {
+    return {
+      email:
+        "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress",
+      given_name:
+        "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/givenname",
+      family_name:
+        "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/surname",
+    };
+  }
+
+  if (providerLower.includes("okta")) {
+    return {
+      email:
+        "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress",
+      given_name:
+        "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/givenname",
+      family_name:
+        "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/surname",
+    };
+  }
+
+  if (providerLower.includes("google")) {
+    return {
+      email: "email",
+      given_name: "first_name",
+      family_name: "last_name",
+    };
+  }
+
+  return null;
 }
 
 // ==================== AUTH0 CONFIGURATION PACK ====================
@@ -421,6 +585,9 @@ export function buildAuth0PastePack({ parsed, source, idpDomains = "" }) {
     ssoUrl: signInService?.location,
   });
 
+  // Build attribute mapping from extracted attributes
+  const mapping = buildAttributeMapping(parsed.attributes, provider);
+
   // Collect warnings
   const warnings = [];
 
@@ -429,7 +596,7 @@ export function buildAuth0PastePack({ parsed, source, idpDomains = "" }) {
   }
   if (!signInService?.location) {
     warnings.push(
-      "Missing Sign In URL (SingleSignOnService). This is required.",
+      "Missing Sign In URL (SingleSignOnService). This is required."
     );
   }
   if (!bestCert?.pem) {
@@ -442,7 +609,7 @@ export function buildAuth0PastePack({ parsed, source, idpDomains = "" }) {
   // Certificate expiry warning
   if (bestCert?.notAfterMs) {
     const daysUntilExpiry = Math.ceil(
-      (bestCert.notAfterMs - Date.now()) / (1000 * 60 * 60 * 24),
+      (bestCert.notAfterMs - Date.now()) / (1000 * 60 * 60 * 24)
     );
 
     if (daysUntilExpiry <= 0) {
@@ -456,25 +623,28 @@ export function buildAuth0PastePack({ parsed, source, idpDomains = "" }) {
 
   if (parsed.certs && parsed.certs.length > 1) {
     warnings.push(
-      `Multiple certificates found (${parsed.certs.length}). Selected the one with latest expiration.`,
+      `Multiple certificates found (${parsed.certs.length}). Selected the one with latest expiration.`
     );
   }
-
-  // Default SAML attribute mappings
-  const mapping = {
-    email: "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress",
-    given_name:
-      "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/givenname",
-    family_name:
-      "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/surname",
-  };
 
   // Collect notes
   const notes = [
     `Source: ${source.type} (${source.value})`,
     `Detected Provider: ${provider}`,
-    "Email mapping is critical for user identification and routing.",
   ];
+
+  // Add note about attribute extraction
+  if (parsed.attributes && parsed.attributes.length > 0) {
+    notes.push(
+      `Found ${parsed.attributes.length} SAML attribute(s) in metadata. Mappings auto-detected.`
+    );
+  } else {
+    notes.push(
+      "No SAML attributes found in metadata. Using provider-specific defaults."
+    );
+  }
+
+  notes.push("Email mapping is critical for user identification and routing.");
 
   if (idpDomains?.trim()) {
     notes.push(`Suggested IdP Domains: ${idpDomains.trim()}`);
@@ -495,6 +665,7 @@ export function buildAuth0PastePack({ parsed, source, idpDomains = "" }) {
       subject: bestCert?.subject || null,
     },
     mapping,
+    extractedAttributes: parsed.attributes || [], // Include raw attributes for reference
     warnings,
     notes,
   };
@@ -524,12 +695,12 @@ export function buildServiceProviderPack({ env, identifier }) {
     envLower === "both"
       ? ["prod", "uat"]
       : envLower === "prod"
-        ? ["prod"]
-        : envLower === "uat"
-          ? ["uat"]
-          : (() => {
-              throw new Error('Environment must be "prod", "uat", or "both"');
-            })();
+      ? ["prod"]
+      : envLower === "uat"
+      ? ["uat"]
+      : (() => {
+          throw new Error('Environment must be "prod", "uat", or "both"');
+        })();
 
   // Generic configuration (replace with your actual domains)
   const config = {
@@ -550,9 +721,13 @@ export function buildServiceProviderPack({ env, identifier }) {
     return {
       env: e.toUpperCase(),
       identifier: cleanIdentifier,
-      metadataUrl: `https://${cfg.authDomain}/saml/metadata?connection=${encodeURIComponent(cleanIdentifier)}`,
-      entityId: `urn:auth:example:${e}:${cleanIdentifier}`,
-      acsUrl: `https://${cfg.authDomain}/login/callback?connection=${encodeURIComponent(cleanIdentifier)}`,
+      metadataUrl: `https://${
+        cfg.authDomain
+      }/samlp/metadata?connection=${encodeURIComponent(cleanIdentifier)}`,
+      entityId: `urn:auth0:florence:${e}:${cleanIdentifier}`,
+      acsUrl: `https://${
+        cfg.authDomain
+      }/login/callback?connection=${encodeURIComponent(cleanIdentifier)}`,
       landingPage: `https://${cfg.appDomain}/login`,
       warnings,
     };

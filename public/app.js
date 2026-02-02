@@ -20,6 +20,46 @@ const ALLOWED_FILE_TYPES = ["text/xml", "application/xml"];
 const API_TIMEOUT = 30000; // 30 seconds
 const MAX_FILENAME_LENGTH = 200;
 
+// ==================== THEME TOGGLE ====================
+const themeToggle = document.getElementById("themeToggle");
+const themeIcon = themeToggle?.querySelector(".theme-icon");
+const themeText = themeToggle?.querySelector(".theme-text");
+
+// Load saved theme preference or default to light
+const savedTheme = localStorage.getItem("theme") || "light";
+if (savedTheme === "dark") {
+  document.documentElement.setAttribute("data-theme", "dark");
+  if (themeIcon) themeIcon.textContent = "☀️";
+  if (themeText) themeText.textContent = "Light";
+}
+
+// Theme toggle handler
+function toggleTheme() {
+  const currentTheme = document.documentElement.getAttribute("data-theme");
+  const newTheme = currentTheme === "dark" ? "light" : "dark";
+
+  document.documentElement.setAttribute("data-theme", newTheme);
+  localStorage.setItem("theme", newTheme);
+
+  // Update button text and icon
+  if (newTheme === "dark") {
+    if (themeIcon) themeIcon.textContent = "☀️";
+    if (themeText) themeText.textContent = "Light";
+  } else {
+    if (themeIcon) themeIcon.textContent = "🌙";
+    if (themeText) themeText.textContent = "Dark";
+  }
+}
+
+// Add event listeners for theme toggle
+themeToggle?.addEventListener("click", toggleTheme);
+themeToggle?.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" || e.key === " ") {
+    e.preventDefault();
+    toggleTheme();
+  }
+});
+
 // ==================== SECURITY & VALIDATION ====================
 
 /**
@@ -304,7 +344,7 @@ document
       setStatus(
         "auth0Status",
         err.message || "Failed to parse metadata",
-        "bad",
+        "bad"
       );
     }
   });
@@ -447,7 +487,7 @@ document.getElementById("downloadPemBtn")?.addEventListener("click", () => {
   downloadFile(
     `sso-cert-${provider}-${date}.pem`,
     cert,
-    "application/x-pem-file",
+    "application/x-pem-file"
   );
 });
 
@@ -494,7 +534,7 @@ document
 
     if (!isValidIdentifier(identifier)) {
       alert(
-        "Identifier can only contain letters, numbers, hyphens, and underscores.",
+        "Identifier can only contain letters, numbers, hyphens, and underscores."
       );
       identifierInput.focus();
       return;
@@ -575,19 +615,19 @@ function renderServiceProviderPack(data) {
 
   results.forEach((r, idx) => {
     const packText = `Environment: ${sanitizeText(r.env || "Unknown")}
-Connection: ${sanitizeText(r.identifier || "Unknown")}
-
-Metadata URL:
-${sanitizeText(r.metadataUrl || "Not available")}
-
-Entity ID (Issuer):
-${sanitizeText(r.entityId || "Not available")}
-
-ACS / Reply URL:
-${sanitizeText(r.acsUrl || "Not available")}
-
-Sign-in Landing Page:
-${sanitizeText(r.landingPage || "Not available")}`;
+   Connection: ${sanitizeText(r.identifier || "Unknown")}
+   
+   Metadata URL:
+   ${sanitizeText(r.metadataUrl || "Not available")}
+   
+   Entity ID (Issuer):
+   ${sanitizeText(r.entityId || "Not available")}
+   
+   ACS / Reply URL:
+   ${sanitizeText(r.acsUrl || "Not available")}
+   
+   Sign-in Landing Page:
+   ${sanitizeText(r.landingPage || "Not available")}`;
 
     const textareaId = `sp-msg-${idx}`;
     const downloadBtnId = `sp-dl-${idx}`;
@@ -595,19 +635,21 @@ ${sanitizeText(r.landingPage || "Not available")}`;
     const card = document.createElement("div");
     card.className = "card";
     card.innerHTML = `
-      <div class="card-top">
-        <div>
-          <h3 class="card-title">${sanitizeText(r.env || "Unknown")} Environment Setup</h3>
-          <div class="micro">Copy and send to customer for IdP configuration.</div>
-        </div>
-        <div class="actions">
-          <button class="btn small ghost copy" data-copy="${textareaId}">Copy</button>
-          <button class="btn small" id="${downloadBtnId}">Download .txt</button>
-        </div>
-      </div>
-      <textarea id="${textareaId}" rows="9" readonly spellcheck="false"></textarea>
-      ${renderWarnings(r.warnings)}
-    `;
+         <div class="card-top">
+           <div>
+             <h3 class="card-title">${sanitizeText(
+               r.env || "Unknown"
+             )} Environment Setup</h3>
+             <div class="micro">Copy and send to customer for IdP configuration.</div>
+           </div>
+           <div class="actions">
+             <button class="btn small ghost copy" data-copy="${textareaId}">Copy</button>
+             <button class="btn small" id="${downloadBtnId}">Download .txt</button>
+           </div>
+         </div>
+         <textarea id="${textareaId}" rows="9" readonly spellcheck="false"></textarea>
+         ${renderWarnings(r.warnings)}
+       `;
 
     wrap.appendChild(card);
 
@@ -648,6 +690,7 @@ function renderWarnings(warnings = []) {
 // ==================== INITIALIZATION ====================
 console.log("SSO Automation Toolkit by Dek Mohamud - Initialized");
 
-// Security note: All data is stored in runtime memory only
-// No localStorage, sessionStorage, or cookies are used
-// All data is cleared on page refresh
+// Security note: Theme preference is stored in localStorage
+// All other data is stored in runtime memory only
+// No other localStorage, sessionStorage, or cookies are used
+// All data (except theme) is cleared on page refresh

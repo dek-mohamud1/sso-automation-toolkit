@@ -25,7 +25,7 @@ import {
   fetchXmlFromUrl,
 } from "./samlMetadata.js";
 
-const PORT = process.env.PORT || 5001;
+const PORT = process.env.PORT || 5500;
 const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB
 const MAX_JSON_SIZE = "2mb";
 const MAX_URL_LENGTH = 2048;
@@ -215,7 +215,9 @@ app.post("/api/idp/from-file", upload.single("file"), async (req, res) => {
 
     if (req.file.size > MAX_FILE_SIZE) {
       return res.status(413).json({
-        error: `File too large. Maximum size is ${MAX_FILE_SIZE / 1024 / 1024}MB`,
+        error: `File too large. Maximum size is ${
+          MAX_FILE_SIZE / 1024 / 1024
+        }MB`,
       });
     }
 
@@ -274,7 +276,9 @@ app.post("/api/sp/generate", async (req, res) => {
 
     if (!isValidEnvironment(env)) {
       return res.status(400).json({
-        error: `Invalid environment. Must be one of: ${ALLOWED_ENVIRONMENTS.join(", ")}`,
+        error: `Invalid environment. Must be one of: ${ALLOWED_ENVIRONMENTS.join(
+          ", "
+        )}`,
       });
     }
 
@@ -316,7 +320,9 @@ app.use((err, req, res, next) => {
   if (err instanceof multer.MulterError) {
     if (err.code === "LIMIT_FILE_SIZE") {
       return res.status(413).json({
-        error: `File too large. Maximum size is ${MAX_FILE_SIZE / 1024 / 1024}MB`,
+        error: `File too large. Maximum size is ${
+          MAX_FILE_SIZE / 1024 / 1024
+        }MB`,
       });
     }
     return res.status(400).json({ error: err.message });
@@ -336,7 +342,7 @@ const server = app.listen(PORT, () => {
   console.log("=".repeat(60));
   console.log(`🚀 Server running at http://localhost:${PORT}`);
   console.log(
-    `📁 Serving static files from: ${path.join(__dirname, "public")}`,
+    `📁 Serving static files from: ${path.join(__dirname, "public")}`
   );
   console.log(`🔒 Security: Memory-only storage, no data persistence`);
   console.log(`📊 Max file size: ${MAX_FILE_SIZE / 1024 / 1024}MB`);
