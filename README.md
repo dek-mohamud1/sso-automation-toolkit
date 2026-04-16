@@ -7,7 +7,7 @@ This tool is designed to eliminate repetitive manual SSO setup steps by
 automatically extracting endpoints, certificates, and identifiers from SAML
 metadata and presenting them in a copy-paste-ready format.
 
-> Built as a real-world internal tooling project and adapted for portfolio use.
+> Built as a real-world internal tooling project use.
 
 ---
 

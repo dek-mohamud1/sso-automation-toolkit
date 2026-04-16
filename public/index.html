@@ -1,4 +1,4 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
@@ -28,9 +28,19 @@
         </div>
 
         <div class="top-actions">
+          <span
+            class="pill theme-toggle"
+            id="themeToggle"
+            role="button"
+            aria-label="Toggle dark mode"
+            tabindex="0"
+          >
+            <span class="theme-icon">🌙</span>
+            <span class="theme-text">Dark Mode</span>
+          </span>
           <span class="pill">Client-side only</span>
           <span class="pill subtle">No data stored</span>
-          <span class="pill">v1.1</span>
+          <span class="pill">BETA ver</span>
         </div>
       </header>
 
@@ -54,7 +64,7 @@
       <!-- TAB 1: IdP → Auth0 -->
       <section
         id="tab-auth0"
-        class="panel active"
+        class="panel active panel--enter"
         aria-labelledby="auth0-heading"
       >
         <div class="panel-head">
@@ -68,7 +78,7 @@
           </p>
         </div>
 
-        <div class="card">
+        <div class="card first-card">
           <h3 class="card-title">Input Source</h3>
 
           <div class="grid">
@@ -212,8 +222,16 @@
               </div>
 
               <div class="cert-meta">
-                <div class="cert-exp">
-                  <div class="label">Expires</div>
+                <div id="certExpiryWrap" class="cert-exp">
+                  <div class="cert-exp-label-row">
+                    <div class="label">Expires</div>
+                    <span
+                      id="certExpiryBadge"
+                      class="cert-expiry-badge"
+                      hidden
+                      aria-hidden="true"
+                    ></span>
+                  </div>
                   <div
                     id="certExpiry"
                     class="value"
@@ -286,6 +304,20 @@
               aria-label="Attribute mappings in JSON format"
               spellcheck="false"
             ></textarea>
+          </div>
+
+          <div
+            id="extractedAttrsCard"
+            class="card hidden"
+            aria-live="polite"
+          >
+            <h3 class="card-title">Attributes from metadata</h3>
+            <p id="extractedAttrsHint" class="micro"></p>
+            <ul
+              id="extractedAttrsList"
+              class="list extracted-attr-list"
+              aria-label="SAML attribute names found in metadata"
+            ></ul>
           </div>
 
           <!-- Warnings + Notes -->

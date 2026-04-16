@@ -20,6 +20,46 @@ const ALLOWED_FILE_TYPES = ["text/xml", "application/xml"];
 const API_TIMEOUT = 30000; // 30 seconds
 const MAX_FILENAME_LENGTH = 200;
 
+// ==================== THEME TOGGLE ====================
+const themeToggle = document.getElementById("themeToggle");
+const themeIcon = themeToggle?.querySelector(".theme-icon");
+const themeText = themeToggle?.querySelector(".theme-text");
+
+// Load saved theme preference or default to light
+const savedTheme = localStorage.getItem("theme") || "light";
+if (savedTheme === "dark") {
+  document.documentElement.setAttribute("data-theme", "dark");
+  if (themeIcon) themeIcon.textContent = "☀️";
+  if (themeText) themeText.textContent = "Light";
+}
+
+// Theme toggle handler
+function toggleTheme() {
+  const currentTheme = document.documentElement.getAttribute("data-theme");
+  const newTheme = currentTheme === "dark" ? "light" : "dark";
+
+  document.documentElement.setAttribute("data-theme", newTheme);
+  localStorage.setItem("theme", newTheme);
+
+  // Update button text and icon
+  if (newTheme === "dark") {
+    if (themeIcon) themeIcon.textContent = "☀️";
+    if (themeText) themeText.textContent = "Light";
+  } else {
+    if (themeIcon) themeIcon.textContent = "🌙";
+    if (themeText) themeText.textContent = "Dark";
+  }
+}
+
+// Add event listeners for theme toggle
+themeToggle?.addEventListener("click", toggleTheme);
+themeToggle?.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" || e.key === " ") {
+    e.preventDefault();
+    toggleTheme();
+  }
+});
+
 // ==================== SECURITY & VALIDATION ====================
 
 /**
@@ -112,6 +152,18 @@ async function fetchWithTimeout(url, options = {}, timeout = API_TIMEOUT) {
   }
 }
 
+/** Respects prefers-reduced-motion for scrollIntoView */
+function scrollToEl(el) {
+  if (!el) return;
+  const reduce =
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  el.scrollIntoView({
+    behavior: reduce ? "auto" : "smooth",
+    block: "nearest",
+  });
+}
+
 // ==================== TAB NAVIGATION ====================
 document.querySelectorAll(".tab").forEach((btn) => {
   btn.addEventListener("click", () => {
@@ -121,13 +173,17 @@ document.querySelectorAll(".tab").forEach((btn) => {
       .forEach((b) => b.classList.remove("active"));
     document
       .querySelectorAll(".panel")
-      .forEach((p) => p.classList.remove("active"));
+      .forEach((p) => {
+        p.classList.remove("active");
+        p.classList.remove("panel--enter");
+      });
 
     // Activate clicked tab
     btn.classList.add("active");
     const targetPanel = document.getElementById(`tab-${btn.dataset.tab}`);
     if (targetPanel) {
-      targetPanel.classList.add("active");
+      void targetPanel.offsetWidth;
+      targetPanel.classList.add("active", "panel--enter");
     }
   });
 });
@@ -294,17 +350,13 @@ document
       renderAuth0Pack(data);
       setStatus("auth0Status", "Configuration generated successfully ✓");
 
-      // Scroll to results
-      document.getElementById("auth0Output")?.scrollIntoView({
-        behavior: "smooth",
-        block: "nearest",
-      });
+      scrollToEl(document.getElementById("auth0Output"));
     } catch (err) {
       console.error("Parse error:", err);
       setStatus(
         "auth0Status",
         err.message || "Failed to parse metadata",
-        "bad",
+        "bad"
       );
     }
   });
@@ -355,15 +407,110 @@ document
       renderAuth0Pack(data);
       setStatus("auth0Status", "Configuration generated successfully ✓");
 
-      document.getElementById("auth0Output")?.scrollIntoView({
-        behavior: "smooth",
-        block: "nearest",
-      });
+      scrollToEl(document.getElementById("auth0Output"));
     } catch (err) {
       console.error("File parse error:", err);
       setStatus("auth0Status", err.message || "Failed to parse file", "bad");
     }
   });
+
+// ==================== RENDER AUTH0 CONFIGURATION ====================
+function renderCertExpiry(certInfo) {
+  const valueEl = document.getElementById("certExpiry");
+  const wrap = document.getElementById("certExpiryWrap");
+  const badge = document.getElementById("certExpiryBadge");
+  if (!valueEl) return;
+
+  const urgency = certInfo?.urgency || "unknown";
+  const expires = certInfo?.expires;
+  const days = certInfo?.daysUntilExpiry;
+
+  if (wrap) {
+    wrap.classList.remove("is-ok", "is-soon", "is-expired", "is-unknown");
+    wrap.classList.add(`is-${urgency}`);
+  }
+
+  if (badge) {
+    badge.className = "cert-expiry-badge";
+    if (urgency === "expired") {
+      badge.textContent = "Expired";
+      badge.classList.add("cert-expiry-badge--expired");
+      badge.removeAttribute("hidden");
+    } else if (urgency === "soon") {
+      badge.textContent = "Renew soon";
+      badge.classList.add("cert-expiry-badge--soon");
+      badge.removeAttribute("hidden");
+    } else {
+      badge.textContent = "";
+      badge.setAttribute("hidden", "");
+    }
+  }
+
+  let line = "Unknown";
+  if (expires) {
+    line = String(expires);
+    if (typeof days === "number" && Number.isFinite(days)) {
+      if (days <= 0) {
+        line += " — expired";
+      } else {
+        line += ` — ${days} day${days === 1 ? "" : "s"} remaining`;
+      }
+    }
+  } else if (urgency === "unknown" && certInfo?.subject) {
+    line = "Unknown (certificate present; expiry not parsed)";
+  }
+
+  valueEl.textContent = line;
+
+  let aria = "Certificate expiration date.";
+  if (urgency === "expired") {
+    aria = "Certificate has expired.";
+  } else if (urgency === "soon") {
+    aria = "Certificate expires within thirty days.";
+  } else if (urgency === "ok") {
+    aria = "Certificate expiration is more than thirty days away.";
+  } else {
+    aria = "Certificate expiration unknown.";
+  }
+  valueEl.setAttribute("aria-label", aria);
+}
+
+function renderExtractedAttributes(data) {
+  const card = document.getElementById("extractedAttrsCard");
+  const hint = document.getElementById("extractedAttrsHint");
+  const list = document.getElementById("extractedAttrsList");
+  if (!card || !hint || !list) return;
+
+  const attrs = Array.isArray(data.extractedAttributes)
+    ? data.extractedAttributes
+    : [];
+
+  if (attrs.length === 0) {
+    card.classList.add("hidden");
+    list.innerHTML = "";
+    hint.textContent = "";
+    return;
+  }
+
+  card.classList.remove("hidden");
+
+  hint.textContent =
+    "Declarations found in metadata (deduped by name). Tags show whether the name came from IdP Attribute elements and/or SP RequestedAttribute sections. Compare with the JSON mapping below.";
+
+  list.innerHTML = "";
+  attrs.forEach((attr) => {
+    const li = document.createElement("li");
+    const name = attr?.name != null ? String(attr.name) : "";
+    const friendly = attr?.friendlyName != null ? String(attr.friendlyName) : "";
+    const bits = [name];
+    if (friendly) bits.push(`(${friendly})`);
+    if (attr?.isProfile) bits.push("[profile]");
+    else if (attr?.source === "requested") bits.push("[RequestedAttribute]");
+    else if (attr?.source === "both") bits.push("[Attribute + RequestedAttribute]");
+    li.textContent = bits.join(" ");
+    list.appendChild(li);
+  });
+}
 
 // ==================== RENDER AUTH0 CONFIGURATION ====================
 function renderAuth0Pack(data) {
@@ -385,7 +532,7 @@ function renderAuth0Pack(data) {
 
   // Certificate
   setValue("certPem", data.fields?.certificate || "");
-  setText("certExpiry", data.certInfo?.expires || "Unknown");
+  renderCertExpiry(data.certInfo);
 
   // Attribute mappings
   try {
@@ -395,6 +542,8 @@ function renderAuth0Pack(data) {
     console.error("Invalid mapping data:", err);
     setValue("mappingJson", "{}");
   }
+
+  renderExtractedAttributes(data);
 
   // Warnings and notes
   renderList("warnList", data.warnings, "No warnings detected.");
@@ -447,7 +596,7 @@ document.getElementById("downloadPemBtn")?.addEventListener("click", () => {
   downloadFile(
     `sso-cert-${provider}-${date}.pem`,
     cert,
-    "application/x-pem-file",
+    "application/x-pem-file"
   );
 });
 
@@ -494,7 +643,7 @@ document
 
     if (!isValidIdentifier(identifier)) {
       alert(
-        "Identifier can only contain letters, numbers, hyphens, and underscores.",
+        "Identifier can only contain letters, numbers, hyphens, and underscores."
       );
       identifierInput.focus();
       return;
@@ -575,19 +724,19 @@ function renderServiceProviderPack(data) {
 
   results.forEach((r, idx) => {
     const packText = `Environment: ${sanitizeText(r.env || "Unknown")}
-Connection: ${sanitizeText(r.identifier || "Unknown")}
-
-Metadata URL:
-${sanitizeText(r.metadataUrl || "Not available")}
-
-Entity ID (Issuer):
-${sanitizeText(r.entityId || "Not available")}
-
-ACS / Reply URL:
-${sanitizeText(r.acsUrl || "Not available")}
-
-Sign-in Landing Page:
-${sanitizeText(r.landingPage || "Not available")}`;
+   Connection: ${sanitizeText(r.identifier || "Unknown")}
+   
+   Metadata URL:
+   ${sanitizeText(r.metadataUrl || "Not available")}
+   
+   Entity ID (Issuer):
+   ${sanitizeText(r.entityId || "Not available")}
+   
+   ACS / Reply URL:
+   ${sanitizeText(r.acsUrl || "Not available")}
+   
+   Sign-in Landing Page:
+   ${sanitizeText(r.landingPage || "Not available")}`;
 
     const textareaId = `sp-msg-${idx}`;
     const downloadBtnId = `sp-dl-${idx}`;
@@ -595,19 +744,21 @@ ${sanitizeText(r.landingPage || "Not available")}`;
     const card = document.createElement("div");
     card.className = "card";
     card.innerHTML = `
-      <div class="card-top">
-        <div>
-          <h3 class="card-title">${sanitizeText(r.env || "Unknown")} Environment Setup</h3>
-          <div class="micro">Copy and send to customer for IdP configuration.</div>
-        </div>
-        <div class="actions">
-          <button class="btn small ghost copy" data-copy="${textareaId}">Copy</button>
-          <button class="btn small" id="${downloadBtnId}">Download .txt</button>
-        </div>
-      </div>
-      <textarea id="${textareaId}" rows="9" readonly spellcheck="false"></textarea>
-      ${renderWarnings(r.warnings)}
-    `;
+         <div class="card-top">
+           <div>
+             <h3 class="card-title">${sanitizeText(
+               r.env || "Unknown"
+             )} Environment Setup</h3>
+             <div class="micro">Copy and send to customer for IdP configuration.</div>
+           </div>
+           <div class="actions">
+             <button class="btn small ghost copy" data-copy="${textareaId}">Copy</button>
+             <button class="btn small" id="${downloadBtnId}">Download .txt</button>
+           </div>
+         </div>
+         <textarea id="${textareaId}" rows="9" readonly spellcheck="false"></textarea>
+         ${renderWarnings(r.warnings)}
+       `;
 
     wrap.appendChild(card);
 
@@ -648,6 +799,7 @@ function renderWarnings(warnings = []) {
 // ==================== INITIALIZATION ====================
 console.log("SSO Automation Toolkit by Dek Mohamud - Initialized");
 
-// Security note: All data is stored in runtime memory only
-// No localStorage, sessionStorage, or cookies are used
-// All data is cleared on page refresh
+// Security note: Theme preference is stored in localStorage
+// All other data is stored in runtime memory only
+// No other localStorage, sessionStorage, or cookies are used
+// All data (except theme) is cleared on page refresh
