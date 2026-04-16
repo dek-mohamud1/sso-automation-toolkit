@@ -367,6 +367,11 @@ h1 {
   margin: 24px 0;
 }
 
+.tab:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 3px;
+}
+
 .tab {
   flex: 1;
   padding: 16px 20px;
@@ -426,17 +431,20 @@ h1 {
 
 .panel {
   display: none;
-  animation: fadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .panel.active {
   display: block;
 }
 
-@keyframes fadeIn {
+.panel.panel--enter {
+  animation: fadeInPanel 0.32s ease-out;
+}
+
+@keyframes fadeInPanel {
   from {
     opacity: 0;
-    transform: translateY(15px);
+    transform: translateY(8px);
   }
   to {
     opacity: 1;
@@ -894,12 +902,44 @@ input[type="file"]::file-selector-button:hover {
   border: 1px solid var(--border);
 }
 
+.cert-exp-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
 .cert-exp .label {
   font-size: 11px;
   color: var(--text-subtle);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.8px;
+}
+
+.cert-expiry-badge {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.45px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  background: var(--surface-card);
+}
+
+.cert-expiry-badge--soon {
+  color: var(--warning);
+  border-color: rgba(245, 158, 11, 0.45);
+  background: rgba(245, 158, 11, 0.12);
+}
+
+.cert-expiry-badge--expired {
+  color: var(--error);
+  border-color: rgba(239, 68, 68, 0.45);
+  background: rgba(239, 68, 68, 0.12);
 }
 
 .cert-exp .value {
@@ -936,8 +976,21 @@ input[type="file"]::file-selector-button:hover {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .panel {
+  .panel.panel--enter {
     animation: none;
+  }
+
+  .tab::before {
+    transition: none;
+  }
+
+  .tab:hover,
+  .tab.active,
+  .card:hover,
+  .btn:hover,
+  .logo:hover,
+  .theme-toggle:hover {
+    transform: none;
   }
 
   body,

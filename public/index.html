@@ -64,7 +64,7 @@
       <!-- TAB 1: IdP → Auth0 -->
       <section
         id="tab-auth0"
-        class="panel active"
+        class="panel active panel--enter"
         aria-labelledby="auth0-heading"
       >
         <div class="panel-head">
@@ -223,7 +223,15 @@
 
               <div class="cert-meta">
                 <div id="certExpiryWrap" class="cert-exp">
-                  <div class="label">Expires</div>
+                  <div class="cert-exp-label-row">
+                    <div class="label">Expires</div>
+                    <span
+                      id="certExpiryBadge"
+                      class="cert-expiry-badge"
+                      hidden
+                      aria-hidden="true"
+                    ></span>
+                  </div>
                   <div
                     id="certExpiry"
                     class="value"

@@ -173,13 +173,17 @@ document.querySelectorAll(".tab").forEach((btn) => {
       .forEach((b) => b.classList.remove("active"));
     document
       .querySelectorAll(".panel")
-      .forEach((p) => p.classList.remove("active"));
+      .forEach((p) => {
+        p.classList.remove("active");
+        p.classList.remove("panel--enter");
+      });
 
     // Activate clicked tab
     btn.classList.add("active");
     const targetPanel = document.getElementById(`tab-${btn.dataset.tab}`);
     if (targetPanel) {
-      targetPanel.classList.add("active");
+      void targetPanel.offsetWidth;
+      targetPanel.classList.add("active", "panel--enter");
     }
   });
 });
@@ -414,6 +418,7 @@ document
 function renderCertExpiry(certInfo) {
   const valueEl = document.getElementById("certExpiry");
   const wrap = document.getElementById("certExpiryWrap");
+  const badge = document.getElementById("certExpiryBadge");
   if (!valueEl) return;
 
   const urgency = certInfo?.urgency || "unknown";
@@ -423,6 +428,22 @@ function renderCertExpiry(certInfo) {
   if (wrap) {
     wrap.classList.remove("is-ok", "is-soon", "is-expired", "is-unknown");
     wrap.classList.add(`is-${urgency}`);
+  }
+
+  if (badge) {
+    badge.className = "cert-expiry-badge";
+    if (urgency === "expired") {
+      badge.textContent = "Expired";
+      badge.classList.add("cert-expiry-badge--expired");
+      badge.removeAttribute("hidden");
+    } else if (urgency === "soon") {
+      badge.textContent = "Renew soon";
+      badge.classList.add("cert-expiry-badge--soon");
+      badge.removeAttribute("hidden");
+    } else {
+      badge.textContent = "";
+      badge.setAttribute("hidden", "");
+    }
   }
 
   let line = "Unknown";
