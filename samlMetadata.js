@@ -196,47 +196,87 @@ export function parseSamlMetadataXml(xml) {
 }
 
 /**
- * Extracts SAML attributes from metadata
+ * Merges SAML attribute declarations into a map keyed by Name (deduped).
+ * @param {Map<string, Object>} byName
+ * @param {string} name
+ * @param {string|null} friendlyName
+ * @param {string|null} nameFormat
+ * @param {string} source - "metadata" | "requested"
+ * @param {boolean} [isProfile]
+ */
+function mergeAttributeEntry(
+  byName,
+  name,
+  friendlyName,
+  nameFormat,
+  source,
+  isProfile = false
+) {
+  const k = typeof name === "string" ? name.trim() : "";
+  if (!k) return;
+
+  if (byName.has(k)) {
+    const existing = byName.get(k);
+    if (!existing.friendlyName && friendlyName) existing.friendlyName = friendlyName;
+    if (!existing.nameFormat && nameFormat) existing.nameFormat = nameFormat;
+    if (existing.source !== source && existing.source !== "both") {
+      existing.source = "both";
+    }
+    return;
+  }
+
+  byName.set(k, {
+    name: k,
+    friendlyName: friendlyName || null,
+    nameFormat: nameFormat || null,
+    source,
+    ...(isProfile ? { isProfile: true } : {}),
+  });
+}
+
+/**
+ * Extracts SAML attributes from metadata (IdP Attribute elements, SP
+ * RequestedAttribute, and AttributeProfile hints). Results are deduped by Name.
  * @param {Object} entityDescriptor - Parsed entity descriptor
- * @returns {Array} Array of attribute objects with name and friendlyName
+ * @returns {Array} Array of attribute objects with name, friendlyName, source
  */
 function extractSamlAttributes(entityDescriptor) {
-  const attributes = [];
+  const byName = new Map();
 
-  // Look for Attribute elements in the metadata
-  const attrNodes = findAllByLocalName(entityDescriptor, "Attribute");
-
-  attrNodes.forEach((attr) => {
-    if (!attr || typeof attr !== "object") return;
-
+  for (const attr of findAllByLocalName(entityDescriptor, "Attribute")) {
+    if (!attr || typeof attr !== "object") continue;
     const name = attr["@_Name"] || attr["@_name"];
     const friendlyName = attr["@_FriendlyName"] || attr["@_friendlyName"];
     const nameFormat = attr["@_NameFormat"] || attr["@_nameFormat"];
+    mergeAttributeEntry(byName, name, friendlyName, nameFormat, "metadata");
+  }
 
-    if (name) {
-      attributes.push({
-        name,
-        friendlyName: friendlyName || null,
-        nameFormat: nameFormat || null,
-      });
-    }
-  });
+  for (const node of findAllByLocalName(
+    entityDescriptor,
+    "RequestedAttribute"
+  )) {
+    if (!node || typeof node !== "object") continue;
+    const name = node["@_Name"] || node["@_name"];
+    const friendlyName = node["@_FriendlyName"] || node["@_friendlyName"];
+    const nameFormat = node["@_NameFormat"] || node["@_nameFormat"];
+    mergeAttributeEntry(byName, name, friendlyName, nameFormat, "requested");
+  }
 
-  // Also check for AttributeProfile which some IdPs use
   const attrProfiles = findAllByLocalName(entityDescriptor, "AttributeProfile");
   attrProfiles.forEach((profile) => {
     if (typeof profile === "string" && profile.trim()) {
-      // Extract profile URI which may indicate supported attributes
-      attributes.push({
-        name: profile,
-        friendlyName: "Profile",
-        nameFormat: "urn:oasis:names:tc:SAML:2.0:attrname-format:uri",
-        isProfile: true,
-      });
+      mergeAttributeEntry(
+        byName,
+        profile.trim(),
+        "Profile",
+        "urn:oasis:names:tc:SAML:2.0:attrname-format:uri",
+        "metadata",
+        true
+      );
     }
   });
 
-  return attributes;
+  return Array.from(byName.values());
 }
 
 /**
@@ -425,6 +465,35 @@ function pickBestCertificate(certs) {
 }
 
 /**
+ * Derives certificate expiry urgency for UI (aligns with warning thresholds).
+ * @param {Object|null} bestCert - Certificate object from pickBestCertificate
+ * @returns {{ urgency: string, daysUntilExpiry: number|null, notAfterIso: string|null }}
+ */
+function computeCertExpiryState(bestCert) {
+  if (!bestCert) {
+    return { urgency: "unknown", daysUntilExpiry: null, notAfterIso: null };
+  }
+
+  const notAfterIso = bestCert.notAfter || null;
+
+  if (!Number.isFinite(bestCert.notAfterMs)) {
+    return { urgency: "unknown", daysUntilExpiry: null, notAfterIso };
+  }
+
+  const daysUntilExpiry = Math.ceil(
+    (bestCert.notAfterMs - Date.now()) / (1000 * 60 * 60 * 24)
+  );
+
+  if (daysUntilExpiry <= 0) {
+    return { urgency: "expired", daysUntilExpiry, notAfterIso };
+  }
+  if (daysUntilExpiry <= 30) {
+    return { urgency: "soon", daysUntilExpiry, notAfterIso };
+  }
+  return { urgency: "ok", daysUntilExpiry, notAfterIso };
+}
+
+/**
  * Detects Identity Provider from entity ID and SSO URL
  * @param {Object} params - Detection parameters
  * @returns {string} Provider name
@@ -506,7 +575,7 @@ function buildAttributeMapping(attributes, provider) {
     name: [/displayname/i, /fullname/i, /common_name/i, /cn$/i],
   };
 
-  // Try to match attributes from metadata
+  // Try to match attributes from metadata (prefer explicit Attribute / RequestedAttribute)
   for (const [auth0Field, regexList] of Object.entries(patterns)) {
     for (const attr of attributes) {
       if (attr.isProfile) continue; // Skip profile URIs
@@ -588,6 +657,13 @@ export function buildAuth0PastePack({ parsed, source, idpDomains = "" }) {
   // Build attribute mapping from extracted attributes
   const mapping = buildAttributeMapping(parsed.attributes, provider);
 
+  const requestedAttrCount = (parsed.attributes || []).filter(
+    (a) => a.source === "requested" || a.source === "both"
+  ).length;
+  const metadataOnlyAttrCount = (parsed.attributes || []).filter(
+    (a) => a.source === "metadata"
+  ).length;
+
   // Collect warnings
   const warnings = [];
 
@@ -635,12 +711,16 @@ export function buildAuth0PastePack({ parsed, source, idpDomains = "" }) {
 
   // Add note about attribute extraction
   if (parsed.attributes && parsed.attributes.length > 0) {
+    const reqPart =
+      requestedAttrCount > 0
+        ? ` (${requestedAttrCount} from RequestedAttribute / ACS sections).`
+        : ".";
     notes.push(
-      `Found ${parsed.attributes.length} SAML attribute(s) in metadata. Mappings auto-detected.`
+      `Found ${parsed.attributes.length} SAML attribute declaration(s) in metadata${reqPart} Mappings auto-detected where names match Auth0 fields.`
     );
   } else {
     notes.push(
-      "No SAML attributes found in metadata. Using provider-specific defaults."
+      "No SAML attribute declarations were found in metadata (Attribute / RequestedAttribute). Attribute mappings use provider-specific defaults — verify in Auth0 after upload."
     );
   }
 
@@ -649,6 +729,8 @@ export function buildAuth0PastePack({ parsed, source, idpDomains = "" }) {
   if (idpDomains?.trim()) {
     notes.push(`Suggested IdP Domains: ${idpDomains.trim()}`);
   }
+
+  const certExpiry = computeCertExpiryState(bestCert);
 
   return {
     kind: "auth0",
@@ -663,9 +745,18 @@ export function buildAuth0PastePack({ parsed, source, idpDomains = "" }) {
       expires: bestCert?.notAfter || null,
       issuer: bestCert?.issuer || null,
       subject: bestCert?.subject || null,
+      notAfterIso: certExpiry.notAfterIso,
+      daysUntilExpiry: certExpiry.daysUntilExpiry,
+      urgency: certExpiry.urgency,
     },
     mapping,
     extractedAttributes: parsed.attributes || [], // Include raw attributes for reference
+    attributeExtraction: {
+      totalCount: (parsed.attributes || []).length,
+      requestedAttributeCount: requestedAttrCount,
+      metadataAttributeCount: metadataOnlyAttrCount,
+      usedDefaultMappingOnly: !(parsed.attributes && parsed.attributes.length),
+    },
     warnings,
     notes,
   };

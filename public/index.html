@@ -222,7 +222,7 @@
               </div>
 
               <div class="cert-meta">
-                <div class="cert-exp">
+                <div id="certExpiryWrap" class="cert-exp">
                   <div class="label">Expires</div>
                   <div
                     id="certExpiry"
@@ -296,6 +296,20 @@
               aria-label="Attribute mappings in JSON format"
               spellcheck="false"
             ></textarea>
+          </div>
+
+          <div
+            id="extractedAttrsCard"
+            class="card hidden"
+            aria-live="polite"
+          >
+            <h3 class="card-title">Attributes from metadata</h3>
+            <p id="extractedAttrsHint" class="micro"></p>
+            <ul
+              id="extractedAttrsList"
+              class="list extracted-attr-list"
+              aria-label="SAML attribute names found in metadata"
+            ></ul>
           </div>
 
           <!-- Warnings + Notes -->

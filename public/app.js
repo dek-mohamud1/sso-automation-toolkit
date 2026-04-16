@@ -152,6 +152,18 @@ async function fetchWithTimeout(url, options = {}, timeout = API_TIMEOUT) {
   }
 }
 
+/** Respects prefers-reduced-motion for scrollIntoView */
+function scrollToEl(el) {
+  if (!el) return;
+  const reduce =
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  el.scrollIntoView({
+    behavior: reduce ? "auto" : "smooth",
+    block: "nearest",
+  });
+}
+
 // ==================== TAB NAVIGATION ====================
 document.querySelectorAll(".tab").forEach((btn) => {
   btn.addEventListener("click", () => {
@@ -334,11 +346,7 @@ document
       renderAuth0Pack(data);
       setStatus("auth0Status", "Configuration generated successfully ✓");
 
-      // Scroll to results
-      document.getElementById("auth0Output")?.scrollIntoView({
-        behavior: "smooth",
-        block: "nearest",
-      });
+      scrollToEl(document.getElementById("auth0Output"));
     } catch (err) {
       console.error("Parse error:", err);
       setStatus(
@@ -395,15 +403,93 @@ document
       renderAuth0Pack(data);
       setStatus("auth0Status", "Configuration generated successfully ✓");
 
-      document.getElementById("auth0Output")?.scrollIntoView({
-        behavior: "smooth",
-        block: "nearest",
-      });
+      scrollToEl(document.getElementById("auth0Output"));
     } catch (err) {
       console.error("File parse error:", err);
       setStatus("auth0Status", err.message || "Failed to parse file", "bad");
     }
   });
+
+// ==================== RENDER AUTH0 CONFIGURATION ====================
+function renderCertExpiry(certInfo) {
+  const valueEl = document.getElementById("certExpiry");
+  const wrap = document.getElementById("certExpiryWrap");
+  if (!valueEl) return;
+
+  const urgency = certInfo?.urgency || "unknown";
+  const expires = certInfo?.expires;
+  const days = certInfo?.daysUntilExpiry;
+
+  if (wrap) {
+    wrap.classList.remove("is-ok", "is-soon", "is-expired", "is-unknown");
+    wrap.classList.add(`is-${urgency}`);
+  }
+
+  let line = "Unknown";
+  if (expires) {
+    line = String(expires);
+    if (typeof days === "number" && Number.isFinite(days)) {
+      if (days <= 0) {
+        line += " — expired";
+      } else {
+        line += ` — ${days} day${days === 1 ? "" : "s"} remaining`;
+      }
+    }
+  } else if (urgency === "unknown" && certInfo?.subject) {
+    line = "Unknown (certificate present; expiry not parsed)";
+  }
+
+  valueEl.textContent = line;
+
+  let aria = "Certificate expiration date.";
+  if (urgency === "expired") {
+    aria = "Certificate has expired.";
+  } else if (urgency === "soon") {
+    aria = "Certificate expires within thirty days.";
+  } else if (urgency === "ok") {
+    aria = "Certificate expiration is more than thirty days away.";
+  } else {
+    aria = "Certificate expiration unknown.";
+  }
+  valueEl.setAttribute("aria-label", aria);
+}
+
+function renderExtractedAttributes(data) {
+  const card = document.getElementById("extractedAttrsCard");
+  const hint = document.getElementById("extractedAttrsHint");
+  const list = document.getElementById("extractedAttrsList");
+  if (!card || !hint || !list) return;
+
+  const attrs = Array.isArray(data.extractedAttributes)
+    ? data.extractedAttributes
+    : [];
+
+  if (attrs.length === 0) {
+    card.classList.add("hidden");
+    list.innerHTML = "";
+    hint.textContent = "";
+    return;
+  }
+
+  card.classList.remove("hidden");
+
+  hint.textContent =
+    "Declarations found in metadata (deduped by name). Tags show whether the name came from IdP Attribute elements and/or SP RequestedAttribute sections. Compare with the JSON mapping below.";
+
+  list.innerHTML = "";
+  attrs.forEach((attr) => {
+    const li = document.createElement("li");
+    const name = attr?.name != null ? String(attr.name) : "";
+    const friendly = attr?.friendlyName != null ? String(attr.friendlyName) : "";
+    const bits = [name];
+    if (friendly) bits.push(`(${friendly})`);
+    if (attr?.isProfile) bits.push("[profile]");
+    else if (attr?.source === "requested") bits.push("[RequestedAttribute]");
+    else if (attr?.source === "both") bits.push("[Attribute + RequestedAttribute]");
+    li.textContent = bits.join(" ");
+    list.appendChild(li);
+  });
+}
 
 // ==================== RENDER AUTH0 CONFIGURATION ====================
 function renderAuth0Pack(data) {
@@ -425,7 +511,7 @@ function renderAuth0Pack(data) {
 
   // Certificate
   setValue("certPem", data.fields?.certificate || "");
-  setText("certExpiry", data.certInfo?.expires || "Unknown");
+  renderCertExpiry(data.certInfo);
 
   // Attribute mappings
   try {
@@ -435,6 +521,8 @@ function renderAuth0Pack(data) {
     console.error("Invalid mapping data:", err);
     setValue("mappingJson", "{}");
   }
+
+  renderExtractedAttributes(data);
 
   // Warnings and notes
   renderList("warnList", data.warnings, "No warnings detected.");
