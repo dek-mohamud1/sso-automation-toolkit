@@ -11,3 +11,14 @@ npm-debug.log*
 
 # Editor
 .vscode/
+
+# AIDLC runtime state (local only, not part of feature PRs)
+# Session history IS versioned for compliance audit trail
+aidlc-docs/.aidlc-state/current-session.json
+
+# AIDLC QA handoff documents (local only, manually distributed)
+# These are temporary docs for QA engineer, not part of PRs
+aidlc-docs/qa-handoff/
+
+aidlc-docs/
+.cursor/
