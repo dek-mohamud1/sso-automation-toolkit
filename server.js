@@ -25,7 +25,7 @@ import {
   fetchXmlFromUrl,
 } from "./samlMetadata.js";
 
-const PORT = process.env.PORT || 5500;
+const PORT = process.env.PORT || 8080;
 const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB
 const MAX_JSON_SIZE = "2mb";
 const MAX_URL_LENGTH = 2048;

@@ -171,12 +171,10 @@ document.querySelectorAll(".tab").forEach((btn) => {
     document
       .querySelectorAll(".tab")
       .forEach((b) => b.classList.remove("active"));
-    document
-      .querySelectorAll(".panel")
-      .forEach((p) => {
-        p.classList.remove("active");
-        p.classList.remove("panel--enter");
-      });
+    document.querySelectorAll(".panel").forEach((p) => {
+      p.classList.remove("active");
+      p.classList.remove("panel--enter");
+    });
 
     // Activate clicked tab
     btn.classList.add("active");
@@ -356,7 +354,7 @@ document
       setStatus(
         "auth0Status",
         err.message || "Failed to parse metadata",
-        "bad"
+        "bad",
       );
     }
   });
@@ -501,12 +499,14 @@ function renderExtractedAttributes(data) {
   attrs.forEach((attr) => {
     const li = document.createElement("li");
     const name = attr?.name != null ? String(attr.name) : "";
-    const friendly = attr?.friendlyName != null ? String(attr.friendlyName) : "";
+    const friendly =
+      attr?.friendlyName != null ? String(attr.friendlyName) : "";
     const bits = [name];
     if (friendly) bits.push(`(${friendly})`);
     if (attr?.isProfile) bits.push("[profile]");
     else if (attr?.source === "requested") bits.push("[RequestedAttribute]");
-    else if (attr?.source === "both") bits.push("[Attribute + RequestedAttribute]");
+    else if (attr?.source === "both")
+      bits.push("[Attribute + RequestedAttribute]");
     li.textContent = bits.join(" ");
     list.appendChild(li);
   });
@@ -596,7 +596,7 @@ document.getElementById("downloadPemBtn")?.addEventListener("click", () => {
   downloadFile(
     `sso-cert-${provider}-${date}.pem`,
     cert,
-    "application/x-pem-file"
+    "application/x-pem-file",
   );
 });
 
@@ -643,7 +643,7 @@ document
 
     if (!isValidIdentifier(identifier)) {
       alert(
-        "Identifier can only contain letters, numbers, hyphens, and underscores."
+        "Identifier can only contain letters, numbers, hyphens, and underscores.",
       );
       identifierInput.focus();
       return;
@@ -688,7 +688,7 @@ document
         env: e.toUpperCase(),
         identifier,
         metadataUrl: `https://auth.example.com/saml/metadata?connection=${identifier}`,
-        entityId: `urn:auth:example:${e}:${identifier}`,
+        entityId: `urn:auth0:florencehc-${e}:${identifier}`,
         acsUrl: `https://auth.example.com/login/callback?connection=${identifier}`,
         landingPage: `https://app.example.com/login`,
         warnings: e === "uat" ? ["Non-production environment"] : [],
@@ -747,7 +747,7 @@ function renderServiceProviderPack(data) {
          <div class="card-top">
            <div>
              <h3 class="card-title">${sanitizeText(
-               r.env || "Unknown"
+               r.env || "Unknown",
              )} Environment Setup</h3>
              <div class="micro">Copy and send to customer for IdP configuration.</div>
            </div>
